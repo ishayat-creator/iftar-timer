@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sehri countdown · Dhaka · Bangladesh</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: black;
+            color: white;
+            font-family: 'Segoe UI', 'Roboto', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 0.5rem 1rem;
+        }
+        .countdown-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+        .city-name {
+            font-size: clamp(1.5rem, 6vw, 2.8rem);
+            font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 0.2rem;
+            opacity: 0.85;
+        }
+        .timer {
+            font-size: clamp(4.5rem, 20vw, 15rem);
+            font-weight: 600;
+            line-height: 1.1;
+            margin: 0.2rem 0;
+            text-shadow: 0 0 15px rgba(255,255,255,0.4);
+            font-variant-numeric: tabular-nums;
+        }
+        .label {
+            font-size: clamp(0.9rem, 3vw, 1.5rem);
+            letter-spacing: 3px;
+            font-weight: 300;
+            text-transform: uppercase;
+            margin-top: 0.3rem;
+            opacity: 0.7;
+        }
+        .sehri-time {
+            font-size: 1.2rem;
+            margin-top: 0.6rem;
+            border-bottom: 1px dashed #333;
+            padding-bottom: 0.3rem;
+            display: inline-block;
+            opacity: 0.9;
+        }
+        .division-bar {
+            width: 100%;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.6rem 1.2rem;
+            padding: 1rem 0.5rem 1.2rem;
+            border-top: 1px solid #222;
+            margin-top: 1rem;
+        }
+        .division-btn {
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 0.6rem;
+            font-weight: 200;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+            cursor: pointer;
+            padding: 0.2rem 0;
+            opacity: 0.5;
+            transition: opacity 0.2s;
+            border-bottom: 1px solid transparent;
+        }
+        .division-btn:hover {
+            opacity: 1;
+            text-shadow: 0 0 5px white;
+        }
+        .division-btn.active {
+            opacity: 1;
+            border-bottom: 1px solid white;
+            font-weight: 400;
+        }
+        .note {
+            font-size: 0.55rem;
+            opacity: 0.25;
+            margin-top: 0.2rem;
+        }
+        html {
+            background: black;
+        }
+    </style>
+</head>
+<body>
+    <div class="countdown-wrapper">
+        <div class="city-name" id="cityDisplay">Dhaka</div>
+        <div class="timer" id="timerDisplay">--:--:--</div>
+        <div class="label">until sehri (fajr)</div>
+        <div class="sehri-time" id="fajrTimeLabel">fetching today's time...</div>
+    </div>
+
+    <div class="division-bar" id="divisionBar">
+        <button class="division-btn active" data-city="Dhaka">Dhaka</button>
+        <button class="division-btn" data-city="Chittagong">Chittagong</button>
+        <button class="division-btn" data-city="Sylhet">Sylhet</button>
+        <button class="division-btn" data-city="Mymensingh">Mymensingh</button>
+        <button class="division-btn" data-city="Rajshahi">Rajshahi</button>
+        <button class="division-btn" data-city="Khulna">Khulna</button>
+        <button class="division-btn" data-city="Barisal">Barisal</button>
+        <button class="division-btn" data-city="Rangpur">Rangpur</button>
+        <!-- extra button to go back to Iftar page -->
+        <a href="index.html" style="text-decoration: none;">
+            <button class="division-btn" style="opacity:0.8; border:1px solid #444; padding:0.2rem 0.6rem;">⬅ Iftar</button>
+        </a>
+    </div>
+
+    <script>
+        (function() {
+            const cityCoords = {
+                'Dhaka':      { lat: 23.8103, lon: 90.4125 },
+                'Chittagong': { lat: 22.3569, lon: 91.7832 },
+                'Sylhet':     { lat: 24.8949, lon: 91.8687 },
+                'Mymensingh': { lat: 24.7471, lon: 90.4203 },
+                'Rajshahi':   { lat: 24.3636, lon: 88.6241 },
+                'Khulna':     { lat: 22.8456, lon: 89.5403 },
+                'Barisal':    { lat: 22.7010, lon: 90.3535 },
+                'Rangpur':    { lat: 25.7468, lon: 89.2508 }
+            };
+
+            const cityDisplay = document.getElementById('cityDisplay');
+            const timerDisplay = document.getElementById('timerDisplay');
+            const fajrTimeLabel = document.getElementById('fajrTimeLabel');
+            const divisionButtons = document.querySelectorAll('.division-btn[data-city]'); // exclude the Iftar link
+
+            let currentCity = 'Dhaka';
+            let currentFajrTimestamp = null;
+            let countdownInterval = null;
+            let apiRequestInProgress = false;
+
+            function formatTimeFromSeconds(totalSeconds) {
+                if (totalSeconds < 0) totalSeconds = 0;
+                const hrs = Math.floor(totalSeconds / 3600);
+                const mins = Math.floor((totalSeconds % 3600) / 60);
+                const secs = totalSeconds % 60;
+                return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            function updateCountdownDisplay() {
+                if (!currentFajrTimestamp) {
+                    timerDisplay.textContent = '--:--:--';
+                    return;
+                }
+                const now = Date.now();
+                const diffSeconds = Math.floor((currentFajrTimestamp - now) / 1000);
+                if (diffSeconds <= 0) {
+                    timerDisplay.textContent = '00:00:00';
+                } else {
+                    timerDisplay.textContent = formatTimeFromSeconds(diffSeconds);
+                }
+            }
+
+            async function fetchFajrTime(city) {
+                const coords = cityCoords[city];
+                if (!coords) return;
+                if (apiRequestInProgress) return;
+                apiRequestInProgress = true;
+
+                try {
+                    const date = new Date();
+                    const day = date.getDate();
+                    const month = date.getMonth() + 1;
+                    const year = date.getFullYear();
+
+                    const url = `https://api.aladhan.com/v1/timings/${day}-${month}-${year}?latitude=${coords.lat}&longitude=${coords.lon}&method=2`;
+                    const response = await fetch(url);
+                    const data = await response.json();
+
+                    if (data.code === 200 && data.data?.timings) {
+                        const fajrTimeStr = data.data.timings.Fajr; // "HH:MM"
+                        const [hours, minutes] = fajrTimeStr.split(':').map(Number);
+
+                        // Build UTC timestamp for Bangladesh time (UTC+6)
+                        const bangladeshDate = new Date(Date.UTC(year, month-1, day, hours-6, minutes));
+                        currentFajrTimestamp = bangladeshDate.getTime();
+
+                        const period = hours >= 12 ? 'PM' : 'AM';
+                        const displayHour = hours % 12 || 12;
+                        const minuteStr = minutes.toString().padStart(2,'0');
+                        fajrTimeLabel.textContent = `Sehri ends: ${displayHour}:${minuteStr} ${period} (${city})`;
+                        cityDisplay.textContent = city;
+
+                        updateCountdownDisplay();
+                    } else {
+                        throw new Error('Invalid API response');
+                    }
+                } catch (error) {
+                    // Fallback: approximate Fajr as 5:00 AM (UTC+6)
+                    const fallbackHours = 5;
+                    const fallbackMinutes = 0;
+                    const d = new Date();
+                    const year = d.getFullYear();
+                    const month = d.getMonth();
+                    const day = d.getDate();
+                    const fallbackTimestamp = Date.UTC(year, month, day, fallbackHours-6, fallbackMinutes);
+                    currentFajrTimestamp = fallbackTimestamp;
+                    fajrTimeLabel.textContent = `Sehri ~5:00 AM (fallback)`;
+                    cityDisplay.textContent = city;
+                    updateCountdownDisplay();
+                } finally {
+                    apiRequestInProgress = false;
+                }
+            }
+
+            function setActiveCity(city) {
+                if (!cityCoords[city]) return;
+                currentCity = city;
+
+                divisionButtons.forEach(btn => {
+                    const btnCity = btn.getAttribute('data-city');
+                    btn.classList.toggle('active', btnCity === city);
+                });
+
+                fetchFajrTime(city);
+            }
+
+            divisionButtons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const city = e.target.getAttribute('data-city');
+                    if (city && city !== currentCity) {
+                        setActiveCity(city);
+                    }
+                });
+            });
+
+            function tick() {
+                updateCountdownDisplay();
+            }
+
+            function init() {
+                setActiveCity('Dhaka');
+                if (countdownInterval) clearInterval(countdownInterval);
+                countdownInterval = setInterval(tick, 1000);
+                tick();
+            }
+
+            init();
+
+            // Refresh at midnight
+            function scheduleNextDayRefresh() {
+                const now = new Date();
+                const night = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 5, 0);
+                const msToMidnight = night.getTime() - now.getTime();
+                if (msToMidnight > 0) {
+                    setTimeout(() => {
+                        fetchFajrTime(currentCity);
+                        scheduleNextDayRefresh();
+                    }, msToMidnight);
+                }
+            }
+            scheduleNextDayRefresh();
+        })();
+    </script>
+    <div class="note">sehri ends at fajr · times via Aladhan API (ISNA) · fallback 5:00 AM</div>
+</body>
+</html>
