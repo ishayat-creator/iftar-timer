@@ -185,37 +185,35 @@
             const month = date.getMonth() + 1;
             const year = date.getFullYear();
 
-            // Use method=1 (Karachi) and optionally add tune if needed (here we keep it neutral)
-            const url = `https://api.aladhan.com/v1/timings/${day}-${month}-${year}?latitude=${coords.lat}&longitude=${coords.lon}&method=1`;
+            // Tune: subtract 1 minute from Fajr (second value = -1)
+            const url = `https://api.aladhan.com/v1/timings/${day}-${month}-${year}?latitude=${coords.lat}&longitude=${coords.lon}&method=1&tune=0,-1,0,0,0,0,0,0`;
 
             const response = await fetch(url);
             const data = await response.json();
 
             if (data.code === 200 && data.data?.timings) {
-                const fajrTimeStr = data.data.timings.Fajr;
+                const fajrTimeStr = data.data.timings.Fajr; // e.g., "05:11" after tune
                 const [hours, minutes] = fajrTimeStr.split(':').map(Number);
 
                 // Build timestamp for today's Fajr in Bangladesh time (UTC+6)
                 let fajrTimestamp = new Date(Date.UTC(year, month-1, day, hours-6, minutes)).getTime();
                 const now = Date.now();
 
-                // If today's Fajr has already passed, set target to tomorrow's Fajr
+                // If today's Fajr has already passed, switch to tomorrow's Fajr
                 if (fajrTimestamp < now) {
-                    // Move to next day
                     const tomorrow = new Date(now + 24*60*60*1000);
-                    const tomorrowYear = tomorrow.getUTCFullYear();
-                    const tomorrowMonth = tomorrow.getUTCMonth();
-                    const tomorrowDay = tomorrow.getUTCDate();
-
-                    fajrTimestamp = new Date(Date.UTC(tomorrowYear, tomorrowMonth, tomorrowDay, hours-6, minutes)).getTime();
+                    const tYear = tomorrow.getUTCFullYear();
+                    const tMonth = tomorrow.getUTCMonth();
+                    const tDay = tomorrow.getUTCDate();
+                    fajrTimestamp = new Date(Date.UTC(tYear, tMonth, tDay, hours-6, minutes)).getTime();
                 }
 
                 currentFajrTimestamp = fajrTimestamp;
 
-                // Display the time nicely
+                // Display the tuned time in 12-hour format
                 const period = hours >= 12 ? 'PM' : 'AM';
                 const displayHour = hours % 12 || 12;
-                const minuteStr = minutes.toString().padStart(2,'0');
+                const minuteStr = minutes.toString().padStart(2, '0');
                 fajrTimeLabel.textContent = `Sehri ends: ${displayHour}:${minuteStr} ${period} (${city})`;
                 cityDisplay.textContent = city;
 
@@ -235,7 +233,6 @@
 
             let fallbackTimestamp = new Date(Date.UTC(year, month, day, fallbackHours-6, fallbackMinutes)).getTime();
             if (fallbackTimestamp < Date.now()) {
-                // Move to tomorrow
                 const tomorrow = new Date(Date.now() + 24*60*60*1000);
                 const tYear = tomorrow.getUTCFullYear();
                 const tMonth = tomorrow.getUTCMonth();
@@ -286,7 +283,6 @@
 
     init();
 
-    // Refresh at midnight to get next day's time
     function scheduleNextDayRefresh() {
         const now = new Date();
         const night = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 5, 0);
