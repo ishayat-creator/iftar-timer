@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sehri countdown · Dhaka · Bangladesh</title>
+    <title>Sehri countdown · Ramadan detection</title>
     <style>
         * {
             margin: 0;
@@ -100,17 +100,27 @@
             opacity: 0.25;
             margin-top: 0.2rem;
         }
+        .eid-message {
+            font-size: 2rem;
+            font-weight: 500;
+            margin: 1rem 0;
+            color: #ffd966;
+            text-shadow: 0 0 10px rgba(255,217,102,0.5);
+        }
         html {
             background: black;
         }
     </style>
 </head>
 <body>
-    <div class="countdown-wrapper">
+    <div class="countdown-wrapper" id="countdownWrapper">
         <div class="city-name" id="cityDisplay">Dhaka</div>
-        <div class="timer" id="timerDisplay">--:--:--</div>
-        <div class="label">until sehri (fajr)</div>
-        <div class="sehri-time" id="fajrTimeLabel">fetching today's time...</div>
+        <div id="dynamicContent">
+            <!-- This will be replaced dynamically based on Ramadan status -->
+            <div class="timer" id="timerDisplay">--:--:--</div>
+            <div class="label" id="labelText">until sehri (fajr)</div>
+            <div class="sehri-time" id="fajrTimeLabel">fetching today's time...</div>
+        </div>
     </div>
 
     <div class="division-bar" id="divisionBar">
@@ -122,181 +132,247 @@
         <button class="division-btn" data-city="Khulna">Khulna</button>
         <button class="division-btn" data-city="Barisal">Barisal</button>
         <button class="division-btn" data-city="Rangpur">Rangpur</button>
-        <!-- extra button to go back to Iftar page -->
         <a href="index.html" style="text-decoration: none;">
             <button class="division-btn" style="opacity:0.8; border:1px solid #444; padding:0.2rem 0.6rem;">⬅ Iftar</button>
         </a>
     </div>
 
     <script>
-(function() {
-    const cityCoords = {
-        'Dhaka':      { lat: 23.8103, lon: 90.4125 },
-        'Chittagong': { lat: 22.3569, lon: 91.7832 },
-        'Sylhet':     { lat: 24.8949, lon: 91.8687 },
-        'Mymensingh': { lat: 24.7471, lon: 90.4203 },
-        'Rajshahi':   { lat: 24.3636, lon: 88.6241 },
-        'Khulna':     { lat: 22.8456, lon: 89.5403 },
-        'Barisal':    { lat: 22.7010, lon: 90.3535 },
-        'Rangpur':    { lat: 25.7468, lon: 89.2508 }
-    };
+        (function() {
+            // City coordinates (same as before)
+            const cityCoords = {
+                'Dhaka':      { lat: 23.8103, lon: 90.4125 },
+                'Chittagong': { lat: 22.3569, lon: 91.7832 },
+                'Sylhet':     { lat: 24.8949, lon: 91.8687 },
+                'Mymensingh': { lat: 24.7471, lon: 90.4203 },
+                'Rajshahi':   { lat: 24.3636, lon: 88.6241 },
+                'Khulna':     { lat: 22.8456, lon: 89.5403 },
+                'Barisal':    { lat: 22.7010, lon: 90.3535 },
+                'Rangpur':    { lat: 25.7468, lon: 89.2508 }
+            };
 
-    const cityDisplay = document.getElementById('cityDisplay');
-    const timerDisplay = document.getElementById('timerDisplay');
-    const fajrTimeLabel = document.getElementById('fajrTimeLabel');
-    const divisionButtons = document.querySelectorAll('.division-btn[data-city]');
+            const cityDisplay = document.getElementById('cityDisplay');
+            const dynamicContent = document.getElementById('dynamicContent');
+            const divisionButtons = document.querySelectorAll('.division-btn[data-city]');
 
-    let currentCity = 'Dhaka';
-    let currentFajrTimestamp = null;
-    let countdownInterval = null;
-    let apiRequestInProgress = false;
+            let currentCity = 'Dhaka';
+            let currentFajrTimestamp = null;
+            let countdownInterval = null;
+            let apiRequestInProgress = false;
+            let isRamadan = true; // default true until we check
+            let hijriMonth = null;
 
-    function formatTimeFromSeconds(totalSeconds) {
-        if (totalSeconds < 0) totalSeconds = 0;
-        const hrs = Math.floor(totalSeconds / 3600);
-        const mins = Math.floor((totalSeconds % 3600) / 60);
-        const secs = totalSeconds % 60;
-        return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
+            // Helper: format time from seconds
+            function formatTimeFromSeconds(totalSeconds) {
+                if (totalSeconds < 0) totalSeconds = 0;
+                const hrs = Math.floor(totalSeconds / 3600);
+                const mins = Math.floor((totalSeconds % 3600) / 60);
+                const secs = totalSeconds % 60;
+                return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
 
-    function updateCountdownDisplay() {
-        if (!currentFajrTimestamp) {
-            timerDisplay.textContent = '--:--:--';
-            return;
-        }
-        const now = Date.now();
-        const diffSeconds = Math.floor((currentFajrTimestamp - now) / 1000);
-        if (diffSeconds <= 0) {
-            timerDisplay.textContent = '00:00:00';
-        } else {
-            timerDisplay.textContent = formatTimeFromSeconds(diffSeconds);
-        }
-    }
-
-    async function fetchFajrTime(city) {
-        const coords = cityCoords[city];
-        if (!coords) return;
-        if (apiRequestInProgress) return;
-        apiRequestInProgress = true;
-
-        try {
-            const date = new Date();
-            const day = date.getDate();
-            const month = date.getMonth() + 1;
-            const year = date.getFullYear();
-
-            // Tune: subtract 1 minute from Fajr (second value = -1)
-            const url = `https://api.aladhan.com/v1/timings/${day}-${month}-${year}?latitude=${coords.lat}&longitude=${coords.lon}&method=1&tune=0,-1,0,0,0,0,0,0`;
-
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data.code === 200 && data.data?.timings) {
-                const fajrTimeStr = data.data.timings.Fajr; // e.g., "05:11" after tune
-                const [hours, minutes] = fajrTimeStr.split(':').map(Number);
-
-                // Build timestamp for today's Fajr in Bangladesh time (UTC+6)
-                let fajrTimestamp = new Date(Date.UTC(year, month-1, day, hours-6, minutes)).getTime();
+            // Update countdown display (only used if in Ramadan)
+            function updateCountdownDisplay() {
+                if (!currentFajrTimestamp || !isRamadan) return;
                 const now = Date.now();
+                const diffSeconds = Math.floor((currentFajrTimestamp - now) / 1000);
+                const timerElem = document.getElementById('timerDisplay');
+                if (timerElem) {
+                    if (diffSeconds <= 0) {
+                        timerElem.textContent = '00:00:00';
+                    } else {
+                        timerElem.textContent = formatTimeFromSeconds(diffSeconds);
+                    }
+                }
+            }
 
-                // If today's Fajr has already passed, switch to tomorrow's Fajr
-                if (fajrTimestamp < now) {
-                    const tomorrow = new Date(now + 24*60*60*1000);
-                    const tYear = tomorrow.getUTCFullYear();
-                    const tMonth = tomorrow.getUTCMonth();
-                    const tDay = tomorrow.getUTCDate();
-                    fajrTimestamp = new Date(Date.UTC(tYear, tMonth, tDay, hours-6, minutes)).getTime();
+            // Fetch Fajr time for a city (only used if Ramadan)
+            async function fetchFajrTime(city) {
+                if (!isRamadan) return;
+                const coords = cityCoords[city];
+                if (!coords) return;
+                if (apiRequestInProgress) return;
+                apiRequestInProgress = true;
+
+                try {
+                    const date = new Date();
+                    const day = date.getDate();
+                    const month = date.getMonth() + 1;
+                    const year = date.getFullYear();
+
+                    // Tune: subtract 1 minute from Fajr (same as before)
+                    const url = `https://api.aladhan.com/v1/timings/${day}-${month}-${year}?latitude=${coords.lat}&longitude=${coords.lon}&method=1&tune=0,-1,0,0,0,0,0,0`;
+
+                    const response = await fetch(url);
+                    const data = await response.json();
+
+                    if (data.code === 200 && data.data?.timings) {
+                        const fajrTimeStr = data.data.timings.Fajr;
+                        const [hours, minutes] = fajrTimeStr.split(':').map(Number);
+
+                        let fajrTimestamp = new Date(Date.UTC(year, month-1, day, hours-6, minutes)).getTime();
+                        const now = Date.now();
+
+                        // If today's Fajr has passed, switch to tomorrow's Fajr
+                        if (fajrTimestamp < now) {
+                            const tomorrow = new Date(now + 24*60*60*1000);
+                            const tYear = tomorrow.getUTCFullYear();
+                            const tMonth = tomorrow.getUTCMonth();
+                            const tDay = tomorrow.getUTCDate();
+                            fajrTimestamp = new Date(Date.UTC(tYear, tMonth, tDay, hours-6, minutes)).getTime();
+                        }
+
+                        currentFajrTimestamp = fajrTimestamp;
+
+                        // Update UI elements (they exist because we are in Ramadan mode)
+                        const period = hours >= 12 ? 'PM' : 'AM';
+                        const displayHour = hours % 12 || 12;
+                        const minuteStr = minutes.toString().padStart(2, '0');
+                        const fajrLabel = document.getElementById('fajrTimeLabel');
+                        if (fajrLabel) fajrLabel.textContent = `Sehri ends: ${displayHour}:${minuteStr} ${period} (${city})`;
+                        cityDisplay.textContent = city;
+
+                        updateCountdownDisplay();
+                    } else {
+                        throw new Error('Invalid API response');
+                    }
+                } catch (error) {
+                    console.warn('API failed, using smart fallback');
+                    const now = Date.now();
+                    const year = new Date().getFullYear();
+                    const month = new Date().getMonth();
+                    const day = new Date().getDate();
+                    const fallbackHours = 5;
+                    const fallbackMinutes = 0;
+
+                    let fallbackTimestamp = new Date(Date.UTC(year, month, day, fallbackHours-6, fallbackMinutes)).getTime();
+                    if (fallbackTimestamp < now) {
+                        const tomorrow = new Date(now + 24*60*60*1000);
+                        const tYear = tomorrow.getUTCFullYear();
+                        const tMonth = tomorrow.getUTCMonth();
+                        const tDay = tomorrow.getUTCDate();
+                        fallbackTimestamp = new Date(Date.UTC(tYear, tMonth, tDay, fallbackHours-6, fallbackMinutes)).getTime();
+                    }
+
+                    currentFajrTimestamp = fallbackTimestamp;
+                    const fajrLabel = document.getElementById('fajrTimeLabel');
+                    if (fajrLabel) fajrLabel.textContent = `Sehri ~5:00 AM (fallback)`;
+                    cityDisplay.textContent = city;
+                    updateCountdownDisplay();
+                } finally {
+                    apiRequestInProgress = false;
+                }
+            }
+
+            // Switch city (only if Ramadan)
+            function setActiveCity(city) {
+                if (!isRamadan) return;
+                if (!cityCoords[city]) return;
+                currentCity = city;
+
+                divisionButtons.forEach(btn => {
+                    const btnCity = btn.getAttribute('data-city');
+                    btn.classList.toggle('active', btnCity === city);
+                });
+
+                fetchFajrTime(city);
+            }
+
+            // Show the non-Ramadan (Eid) message
+            function showEidMessage() {
+                // Clear any existing content and show festive message
+                dynamicContent.innerHTML = `
+                    <div class="eid-message">✨ Eid Mubarak! ✨</div>
+                    <div class="timer" style="font-size: 2rem; opacity:0.7;">🎉🌙</div>
+                    <div class="label" style="font-size:1rem;">Sehri returns next Ramadan</div>
+                `;
+                // Also hide the iftar time label (it's not needed)
+                const fajrTimeElem = document.getElementById('fajrTimeLabel');
+                if (fajrTimeElem) fajrTimeElem.style.display = 'none';
+                // Stop any running countdown
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+            }
+
+            // Check if current date is within Ramadan (Hijri month 9)
+            async function checkRamadan() {
+                try {
+                    // Get current Islamic date using Aladhan's Gregorian to Hijri API
+                    const today = new Date();
+                    const day = today.getDate();
+                    const month = today.getMonth() + 1;
+                    const year = today.getFullYear();
+                    const url = `https://api.aladhan.com/v1/gToH/${day}-${month}-${year}`;
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    if (data.code === 200 && data.data) {
+                        const hijriMonthNumber = data.data.hijri.month.number;
+                        hijriMonth = hijriMonthNumber;
+                        isRamadan = (hijriMonthNumber === 9);
+                    } else {
+                        throw new Error('Could not determine Hijri month');
+                    }
+                } catch (error) {
+                    console.warn('Failed to fetch Hijri month, assuming not Ramadan');
+                    isRamadan = false;
                 }
 
-                currentFajrTimestamp = fajrTimestamp;
-
-                // Display the tuned time in 12-hour format
-                const period = hours >= 12 ? 'PM' : 'AM';
-                const displayHour = hours % 12 || 12;
-                const minuteStr = minutes.toString().padStart(2, '0');
-                fajrTimeLabel.textContent = `Sehri ends: ${displayHour}:${minuteStr} ${period} (${city})`;
-                cityDisplay.textContent = city;
-
-                updateCountdownDisplay();
-            } else {
-                throw new Error('Invalid API response');
-            }
-        } catch (error) {
-            console.warn('API failed, using smart fallback');
-            // Fallback: use 5:00 AM, but if it's past 5 AM today, use tomorrow's 5 AM
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = now.getMonth();
-            const day = now.getDate();
-            const fallbackHours = 5;
-            const fallbackMinutes = 0;
-
-            let fallbackTimestamp = new Date(Date.UTC(year, month, day, fallbackHours-6, fallbackMinutes)).getTime();
-            if (fallbackTimestamp < Date.now()) {
-                const tomorrow = new Date(Date.now() + 24*60*60*1000);
-                const tYear = tomorrow.getUTCFullYear();
-                const tMonth = tomorrow.getUTCMonth();
-                const tDay = tomorrow.getUTCDate();
-                fallbackTimestamp = new Date(Date.UTC(tYear, tMonth, tDay, fallbackHours-6, fallbackMinutes)).getTime();
+                // Now set up the page based on isRamadan
+                if (isRamadan) {
+                    // Show normal Sehri timer
+                    dynamicContent.innerHTML = `
+                        <div class="timer" id="timerDisplay">--:--:--</div>
+                        <div class="label" id="labelText">until sehri (fajr)</div>
+                        <div class="sehri-time" id="fajrTimeLabel">fetching today's time...</div>
+                    `;
+                    // Re-initialize timer and city selection
+                    // Need to re-fetch elements after DOM update
+                    // We'll just re-run init logic but we already have the elements.
+                    // Since we replaced innerHTML, we must re-acquire the timer element.
+                    // But the script continues after this function, so we can set the interval again.
+                    // To avoid confusion, we'll just call a function to start the timer again.
+                    startRamadanMode();
+                } else {
+                    showEidMessage();
+                }
             }
 
-            currentFajrTimestamp = fallbackTimestamp;
-            fajrTimeLabel.textContent = `Sehri ~5:00 AM (fallback)`;
-            cityDisplay.textContent = city;
-            updateCountdownDisplay();
-        } finally {
-            apiRequestInProgress = false;
-        }
-    }
-
-    function setActiveCity(city) {
-        if (!cityCoords[city]) return;
-        currentCity = city;
-
-        divisionButtons.forEach(btn => {
-            const btnCity = btn.getAttribute('data-city');
-            btn.classList.toggle('active', btnCity === city);
-        });
-
-        fetchFajrTime(city);
-    }
-
-    divisionButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const city = e.target.getAttribute('data-city');
-            if (city && city !== currentCity) {
-                setActiveCity(city);
+            // This function sets up the Ramadan mode (normal countdown)
+            function startRamadanMode() {
+                // Re-acquire DOM elements after potential innerHTML change
+                const timerElem = document.getElementById('timerDisplay');
+                const fajrLabelElem = document.getElementById('fajrTimeLabel');
+                if (!timerElem || !fajrLabelElem) {
+                    // If not found, maybe the page was already in Ramadan mode, but just to be safe
+                    return;
+                }
+                // Start countdown tick
+                if (countdownInterval) clearInterval(countdownInterval);
+                countdownInterval = setInterval(() => {
+                    if (isRamadan) updateCountdownDisplay();
+                }, 1000);
+                // Set up city selection
+                divisionButtons.forEach(btn => {
+                    btn.removeEventListener('click', handleCityClick);
+                    btn.addEventListener('click', handleCityClick);
+                });
+                // Set active city to Dhaka initially
+                setActiveCity('Dhaka');
             }
-        });
-    });
 
-    function tick() {
-        updateCountdownDisplay();
-    }
+            function handleCityClick(e) {
+                const city = e.target.getAttribute('data-city');
+                if (city && city !== currentCity && isRamadan) {
+                    setActiveCity(city);
+                }
+            }
 
-    function init() {
-        setActiveCity('Dhaka');
-        if (countdownInterval) clearInterval(countdownInterval);
-        countdownInterval = setInterval(tick, 1000);
-        tick();
-    }
-
-    init();
-
-    function scheduleNextDayRefresh() {
-        const now = new Date();
-        const night = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 5, 0);
-        const msToMidnight = night.getTime() - now.getTime();
-        if (msToMidnight > 0) {
-            setTimeout(() => {
-                fetchFajrTime(currentCity);
-                scheduleNextDayRefresh();
-            }, msToMidnight);
-        }
-    }
-    scheduleNextDayRefresh();
-})();
+            // Start the whole process: first check Ramadan status
+            checkRamadan();
+        })();
     </script>
-    <div class="note">sehri ends at fajr · times via Aladhan API (ISNA) · fallback 5:00 AM</div>
+    <div class="note">🌙 Automatically shows Sehri only during Ramadan · Eid Mubarak!</div>
 </body>
 </html>
