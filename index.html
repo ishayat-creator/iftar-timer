@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iftar countdown · Dhaka · Bangladesh</title>
+    <title>Iftar Countdown · Eid Mubarak!</title>
     <style>
         * {
             margin: 0;
@@ -14,14 +14,15 @@
         body {
             background-color: black;
             color: white;
-            font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
+            font-family: 'Segoe UI', 'Roboto', sans-serif;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             text-align: center;
-            padding: 0.5rem 1rem; /* reduced vertical padding */
+            padding: 0.5rem 1rem;
+            position: relative;
         }
 
         .countdown-wrapper {
@@ -31,12 +32,10 @@
             justify-content: center;
             align-items: center;
             width: 100%;
-            margin: 0;          /* minimize extra space */
         }
 
-        /* city name – smaller than before */
         .city-name {
-            font-size: clamp(1.5rem, 6vw, 2.8rem);  /* reduced */
+            font-size: clamp(1.5rem, 6vw, 2.8rem);
             font-weight: 300;
             letter-spacing: 2px;
             text-transform: uppercase;
@@ -44,9 +43,8 @@
             opacity: 0.85;
         }
 
-        /* MAIN TIMER – much bigger */
         .timer {
-            font-size: clamp(4.5rem, 20vw, 15rem);  /* enlarged significantly */
+            font-size: clamp(4.5rem, 20vw, 15rem);
             font-weight: 600;
             line-height: 1.1;
             margin: 0.2rem 0;
@@ -54,9 +52,8 @@
             font-variant-numeric: tabular-nums;
         }
 
-        /* "until iftar" label – slightly smaller */
         .label {
-            font-size: clamp(0.9rem, 3vw, 1.5rem);   /* reduced a bit */
+            font-size: clamp(0.9rem, 3vw, 1.5rem);
             letter-spacing: 3px;
             font-weight: 300;
             text-transform: uppercase;
@@ -64,9 +61,8 @@
             opacity: 0.7;
         }
 
-        /* specific iftar time line – smaller */
         .iftar-time {
-            font-size: 1.2rem;        /* down from 1.5rem */
+            font-size: 1.2rem;
             margin-top: 0.6rem;
             border-bottom: 1px dashed #333;
             padding-bottom: 0.3rem;
@@ -74,7 +70,36 @@
             opacity: 0.9;
         }
 
-        /* division bar – even tinier font */
+        .eid-message {
+            font-size: 3rem;
+            font-weight: 600;
+            margin: 1rem 0;
+            color: #ffd966;
+            text-shadow: 0 0 20px rgba(255,217,102,0.7);
+            animation: glow 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 10px gold; }
+            to { text-shadow: 0 0 30px #ffaa00; }
+        }
+
+        .eid-sub {
+            font-size: 1.2rem;
+            opacity: 0.8;
+        }
+
+        .festive-badge {
+            background: rgba(255,215,0,0.2);
+            border: 1px solid gold;
+            border-radius: 50px;
+            padding: 0.3rem 1rem;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+            display: inline-block;
+            color: #ffd966;
+        }
+
         .division-bar {
             width: 100%;
             display: flex;
@@ -90,14 +115,14 @@
             background: transparent;
             border: none;
             color: white;
-            font-size: 0.6rem;         /* reduced from 0.75rem */
+            font-size: 0.6rem;
             font-weight: 200;
             letter-spacing: 0.4px;
             text-transform: uppercase;
             cursor: pointer;
             padding: 0.2rem 0;
             opacity: 0.5;
-            transition: opacity 0.2s ease, text-shadow 0.2s;
+            transition: opacity 0.2s;
             border-bottom: 1px solid transparent;
         }
 
@@ -112,12 +137,21 @@
             font-weight: 400;
         }
 
-        /* tiny note at bottom – even smaller */
         .note {
-            font-size: 0.55rem;        /* reduced from 0.7rem */
+            font-size: 0.55rem;
             opacity: 0.25;
             margin-top: 0.2rem;
-            line-height: 1.2;
+        }
+
+        /* Canvas for confetti */
+        #confetti-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
         }
 
         html {
@@ -126,14 +160,16 @@
     </style>
 </head>
 <body>
+    <canvas id="confetti-canvas"></canvas>
+
     <div class="countdown-wrapper">
         <div class="city-name" id="cityDisplay">Dhaka</div>
         <div class="timer" id="timerDisplay">--:--:--</div>
-        <div class="label">until iftar (maghrib)</div>
+        <div class="label" id="labelText">until iftar (maghrib)</div>
         <div class="iftar-time" id="iftarTimeLabel">fetching today's time...</div>
+        <div id="eidNotice" class="festive-badge" style="display: none;">🌙 Tomorrow is Eid! 🌙</div>
     </div>
 
-    <!-- division bar (tiny font) -->
     <div class="division-bar" id="divisionBar">
         <button class="division-btn active" data-city="Dhaka">Dhaka</button>
         <button class="division-btn" data-city="Chittagong">Chittagong</button>
@@ -144,179 +180,304 @@
         <button class="division-btn" data-city="Barisal">Barisal</button>
         <button class="division-btn" data-city="Rangpur">Rangpur</button>
         <a href="sehri.html" style="text-decoration: none;">
-    <button class="division-btn" style="opacity:0.8; border:1px solid #444; padding:0.2rem 0.6rem;">🌙 Sehri</button>
-</a>
+            <button class="division-btn" style="opacity:0.8; border:1px solid #444; padding:0.2rem 0.6rem;">🌙 Sehri</button>
+        </a>
     </div>
 
     <script>
         (function() {
-    const cityCoords = {
-        'Dhaka':      { lat: 23.8103, lon: 90.4125 },
-        'Chittagong': { lat: 22.3569, lon: 91.7832 },
-        'Sylhet':     { lat: 24.8949, lon: 91.8687 },
-        'Mymensingh': { lat: 24.7471, lon: 90.4203 },
-        'Rajshahi':   { lat: 24.3636, lon: 88.6241 },
-        'Khulna':     { lat: 22.8456, lon: 89.5403 },
-        'Barisal':    { lat: 22.7010, lon: 90.3535 },
-        'Rangpur':    { lat: 25.7468, lon: 89.2508 }
-    };
+            // ========== City coordinates ==========
+            const cityCoords = {
+                'Dhaka':      { lat: 23.8103, lon: 90.4125 },
+                'Chittagong': { lat: 22.3569, lon: 91.7832 },
+                'Sylhet':     { lat: 24.8949, lon: 91.8687 },
+                'Mymensingh': { lat: 24.7471, lon: 90.4203 },
+                'Rajshahi':   { lat: 24.3636, lon: 88.6241 },
+                'Khulna':     { lat: 22.8456, lon: 89.5403 },
+                'Barisal':    { lat: 22.7010, lon: 90.3535 },
+                'Rangpur':    { lat: 25.7468, lon: 89.2508 }
+            };
 
-    const cityDisplay = document.getElementById('cityDisplay');
-    const timerDisplay = document.getElementById('timerDisplay');
-    const iftarTimeLabel = document.getElementById('iftarTimeLabel');
-    const divisionButtons = document.querySelectorAll('.division-btn[data-city]');
+            // DOM elements
+            const cityDisplay = document.getElementById('cityDisplay');
+            const timerDisplay = document.getElementById('timerDisplay');
+            const iftarTimeLabel = document.getElementById('iftarTimeLabel');
+            const labelText = document.getElementById('labelText');
+            const eidNotice = document.getElementById('eidNotice');
+            const divisionButtons = document.querySelectorAll('.division-btn[data-city]');
 
-    let currentCity = 'Dhaka';
-    let currentIftarTimestamp = null;
-    let countdownInterval = null;
-    let apiRequestInProgress = false;
+            // State
+            let currentCity = 'Dhaka';
+            let currentIftarTimestamp = null;
+            let countdownInterval = null;
+            let apiRequestInProgress = false;
+            let isTomorrowEid = false;
+            let eidCelebrated = false;    // to avoid multiple confetti bursts
+            let isAfterIftar = false;      // whether today's iftar time has passed
 
-    function formatTimeFromSeconds(totalSeconds) {
-        if (totalSeconds < 0) totalSeconds = 0;
-        const hrs = Math.floor(totalSeconds / 3600);
-        const mins = Math.floor((totalSeconds % 3600) / 60);
-        const secs = totalSeconds % 60;
-        return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
+            // ========== Helper: format time ==========
+            function formatTimeFromSeconds(totalSeconds) {
+                if (totalSeconds < 0) totalSeconds = 0;
+                const hrs = Math.floor(totalSeconds / 3600);
+                const mins = Math.floor((totalSeconds % 3600) / 60);
+                const secs = totalSeconds % 60;
+                return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            }
 
-    function updateCountdownDisplay() {
-        if (!currentIftarTimestamp) {
-            timerDisplay.textContent = '--:--:--';
-            return;
-        }
-        const now = Date.now();
-        const diffSeconds = Math.floor((currentIftarTimestamp - now) / 1000);
-        if (diffSeconds <= 0) {
-            timerDisplay.textContent = '00:00:00';
-        } else {
-            timerDisplay.textContent = formatTimeFromSeconds(diffSeconds);
-        }
-    }
+            // ========== Confetti / Fireworks ==========
+            function launchFireworks() {
+                if (eidCelebrated) return;
+                eidCelebrated = true;
 
-    async function fetchIftarTime(city) {
-        const coords = cityCoords[city];
-        if (!coords) return;
-        if (apiRequestInProgress) return;
-        apiRequestInProgress = true;
+                // Simple canvas confetti (using canvas)
+                const canvas = document.getElementById('confetti-canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                let particles = [];
 
-        try {
-            const date = new Date();
-            const day = date.getDate();
-            const month = date.getMonth() + 1;
-            const year = date.getFullYear();
-
-            // Correct tune: 8 values, 6th = Maghrib (+2 minutes)
-            const url = `https://api.aladhan.com/v1/timings/${day}-${month}-${year}?latitude=${coords.lat}&longitude=${coords.lon}&method=1&tune=0,0,0,0,0,2,0,0`;
-
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data.code === 200 && data.data?.timings) {
-                const maghribTimeStr = data.data.timings.Maghrib; // e.g., "17:58" after tune
-                const [hours, minutes] = maghribTimeStr.split(':').map(Number);
-
-                // Build timestamp for today's Maghrib in Bangladesh time (UTC+6)
-                let iftarTimestamp = new Date(Date.UTC(year, month-1, day, hours-6, minutes)).getTime();
-                const now = Date.now();
-
-                // If today's Iftar has passed, automatically switch to tomorrow's Iftar
-                if (iftarTimestamp < now) {
-                    const tomorrow = new Date(now + 24*60*60*1000);
-                    const tYear = tomorrow.getUTCFullYear();
-                    const tMonth = tomorrow.getUTCMonth();
-                    const tDay = tomorrow.getUTCDate();
-                    iftarTimestamp = new Date(Date.UTC(tYear, tMonth, tDay, hours-6, minutes)).getTime();
+                function random(min, max) {
+                    return min + Math.random() * (max - min);
                 }
 
-                currentIftarTimestamp = iftarTimestamp;
+                function createParticle() {
+                    return {
+                        x: random(0, canvas.width),
+                        y: random(0, canvas.height / 2),
+                        size: random(5, 15),
+                        speedX: random(-3, 3),
+                        speedY: random(2, 8),
+                        color: `hsl(${random(0, 360)}, 80%, 60%)`,
+                        life: 1,
+                        decay: 0.02
+                    };
+                }
 
-                // Display the tuned time in 12-hour format
-                const period = hours >= 12 ? 'PM' : 'AM';
-                const displayHour = hours % 12 || 12;
-                const minuteStr = minutes.toString().padStart(2, '0');
-                iftarTimeLabel.textContent = `Iftar today: ${displayHour}:${minuteStr} ${period} (${city})`;
-                cityDisplay.textContent = city;
+                for (let i = 0; i < 150; i++) {
+                    particles.push(createParticle());
+                }
 
+                function draw() {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    let allDead = true;
+                    for (let i = 0; i < particles.length; i++) {
+                        const p = particles[i];
+                        if (p.life <= 0) continue;
+                        allDead = false;
+                        ctx.fillStyle = p.color;
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                        ctx.fill();
+                        p.x += p.speedX;
+                        p.y += p.speedY;
+                        p.life -= p.decay;
+                        p.size *= 0.98;
+                    }
+                    if (!allDead) requestAnimationFrame(draw);
+                    else {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    }
+                }
+                draw();
+
+                // Also optional: play a small sound? Not adding to keep it simple.
+            }
+
+            // ========== Show Eid screen (after iftar or on Eid day) ==========
+            function showEidScreen() {
+                // Stop countdown if running
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+                // Change UI to Eid message
+                timerDisplay.style.display = 'none';
+                labelText.style.display = 'none';
+                iftarTimeLabel.style.display = 'none';
+                eidNotice.style.display = 'none'; // hide the "Tomorrow is Eid" badge
+
+                // Create Eid message if not already present
+                let eidDiv = document.querySelector('.eid-message');
+                if (!eidDiv) {
+                    eidDiv = document.createElement('div');
+                    eidDiv.className = 'eid-message';
+                    document.querySelector('.countdown-wrapper').appendChild(eidDiv);
+                }
+                eidDiv.innerHTML = '✨ Eid Mubarak! ✨<div class="eid-sub">May your days be filled with joy</div>';
+                eidDiv.style.display = 'block';
+
+                // Launch fireworks
+                launchFireworks();
+            }
+
+            // ========== Update countdown ==========
+            function updateCountdownDisplay() {
+                if (!currentIftarTimestamp) return;
+
+                const now = Date.now();
+                const diffSeconds = Math.floor((currentIftarTimestamp - now) / 1000);
+
+                if (diffSeconds <= 0) {
+                    // Iftar time has passed
+                    if (!isAfterIftar) {
+                        isAfterIftar = true;
+                        showEidScreen();   // Eid celebration after iftar
+                    }
+                    return;
+                } else {
+                    // Still before iftar
+                    if (isAfterIftar) return; // already showed Eid
+                    timerDisplay.textContent = formatTimeFromSeconds(diffSeconds);
+                }
+            }
+
+            // ========== Check if tomorrow is Eid (Shawwal) ==========
+            async function checkTomorrowEid() {
+                try {
+                    const today = new Date();
+                    const tomorrow = new Date(today);
+                    tomorrow.setDate(today.getDate() + 1);
+                    const day = tomorrow.getDate();
+                    const month = tomorrow.getMonth() + 1;
+                    const year = tomorrow.getFullYear();
+
+                    const url = `https://api.aladhan.com/v1/gToH/${day}-${month}-${year}`;
+                    const response = await fetch(url);
+                    const data = await response.json();
+                    if (data.code === 200 && data.data) {
+                        const hijriMonth = data.data.hijri.month.number;
+                        // Shawwal is month 10
+                        isTomorrowEid = (hijriMonth === 10);
+                        if (isTomorrowEid) {
+                            eidNotice.style.display = 'inline-block';
+                        }
+                    } else {
+                        throw new Error();
+                    }
+                } catch (error) {
+                    console.warn("Could not detect tomorrow's Hijri month");
+                    isTomorrowEid = false;
+                }
+            }
+
+            // ========== Fetch Iftar time (with tuning +2 minutes) ==========
+            async function fetchIftarTime(city) {
+                const coords = cityCoords[city];
+                if (!coords) return;
+                if (apiRequestInProgress) return;
+                apiRequestInProgress = true;
+
+                try {
+                    const date = new Date();
+                    const day = date.getDate();
+                    const month = date.getMonth() + 1;
+                    const year = date.getFullYear();
+
+                    // Tune: +2 minutes for Maghrib (6th value)
+                    const url = `https://api.aladhan.com/v1/timings/${day}-${month}-${year}?latitude=${coords.lat}&longitude=${coords.lon}&method=1&tune=0,0,0,0,0,2,0,0`;
+
+                    const response = await fetch(url);
+                    const data = await response.json();
+
+                    if (data.code === 200 && data.data?.timings) {
+                        const maghribTimeStr = data.data.timings.Maghrib;
+                        const [hours, minutes] = maghribTimeStr.split(':').map(Number);
+
+                        // Build timestamp for today's Maghrib (UTC+6)
+                        let iftarTimestamp = new Date(Date.UTC(year, month-1, day, hours-6, minutes)).getTime();
+                        const now = Date.now();
+
+                        // If today's Iftar has already passed, we could still show countdown to tomorrow?
+                        // But we want to show Eid if it's after Iftar on last day.
+                        // For the purpose of Eid celebration, we set it as is. If it's after Iftar now,
+                        // we'll detect that in updateCountdownDisplay.
+                        currentIftarTimestamp = iftarTimestamp;
+
+                        // Display the tuned time
+                        const period = hours >= 12 ? 'PM' : 'AM';
+                        const displayHour = hours % 12 || 12;
+                        const minuteStr = minutes.toString().padStart(2,'0');
+                        iftarTimeLabel.textContent = `Iftar today: ${displayHour}:${minuteStr} ${period} (${city})`;
+                        cityDisplay.textContent = city;
+
+                        updateCountdownDisplay();
+                    } else {
+                        throw new Error('Invalid API response');
+                    }
+                } catch (error) {
+                    console.warn('API failed, using fallback');
+                    // Fallback: 6:00 PM (18:00)
+                    const fallbackHours = 18;
+                    const fallbackMinutes = 0;
+                    const d = new Date();
+                    const year = d.getFullYear();
+                    const month = d.getMonth();
+                    const day = d.getDate();
+                    currentIftarTimestamp = new Date(Date.UTC(year, month, day, fallbackHours-6, fallbackMinutes)).getTime();
+                    iftarTimeLabel.textContent = `Iftar ~6:00 PM (fallback)`;
+                    cityDisplay.textContent = city;
+                    updateCountdownDisplay();
+                } finally {
+                    apiRequestInProgress = false;
+                }
+            }
+
+            // ========== Switch city ==========
+            function setActiveCity(city) {
+                if (!cityCoords[city]) return;
+                currentCity = city;
+
+                divisionButtons.forEach(btn => {
+                    const btnCity = btn.getAttribute('data-city');
+                    btn.classList.toggle('active', btnCity === city);
+                });
+
+                fetchIftarTime(city);
+            }
+
+            // ========== Event listeners ==========
+            divisionButtons.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const city = e.target.getAttribute('data-city');
+                    if (city && city !== currentCity) {
+                        setActiveCity(city);
+                    }
+                });
+            });
+
+            // ========== Countdown tick ==========
+            function tick() {
                 updateCountdownDisplay();
-            } else {
-                throw new Error('Invalid API response');
-            }
-        } catch (error) {
-            console.warn('API failed, using smart fallback');
-            // Fallback: use 6:00 PM, but if it's past 6 PM today, use tomorrow's 6 PM
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = now.getMonth();
-            const day = now.getDate();
-            const fallbackHours = 18; // 6:00 PM
-            const fallbackMinutes = 0;
-
-            let fallbackTimestamp = new Date(Date.UTC(year, month, day, fallbackHours-6, fallbackMinutes)).getTime();
-            if (fallbackTimestamp < Date.now()) {
-                const tomorrow = new Date(Date.now() + 24*60*60*1000);
-                const tYear = tomorrow.getUTCFullYear();
-                const tMonth = tomorrow.getUTCMonth();
-                const tDay = tomorrow.getUTCDate();
-                fallbackTimestamp = new Date(Date.UTC(tYear, tMonth, tDay, fallbackHours-6, fallbackMinutes)).getTime();
             }
 
-            currentIftarTimestamp = fallbackTimestamp;
-            iftarTimeLabel.textContent = `Iftar ~6:00 PM (fallback)`;
-            cityDisplay.textContent = city;
-            updateCountdownDisplay();
-        } finally {
-            apiRequestInProgress = false;
-        }
-    }
-
-    function setActiveCity(city) {
-        if (!cityCoords[city]) return;
-        currentCity = city;
-
-        divisionButtons.forEach(btn => {
-            const btnCity = btn.getAttribute('data-city');
-            btn.classList.toggle('active', btnCity === city);
-        });
-
-        fetchIftarTime(city);
-    }
-
-    divisionButtons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const city = e.target.getAttribute('data-city');
-            if (city && city !== currentCity) {
-                setActiveCity(city);
+            // ========== Initialise ==========
+            async function init() {
+                await checkTomorrowEid();   // we don't wait for it, but it's fine
+                setActiveCity('Dhaka');
+                if (countdownInterval) clearInterval(countdownInterval);
+                countdownInterval = setInterval(tick, 1000);
+                tick();
             }
-        });
-    });
 
-    function tick() {
-        updateCountdownDisplay();
-    }
+            init();
 
-    function init() {
-        setActiveCity('Dhaka');
-        if (countdownInterval) clearInterval(countdownInterval);
-        countdownInterval = setInterval(tick, 1000);
-        tick();
-    }
-
-    init();
-
-    function scheduleNextDayRefresh() {
-        const now = new Date();
-        const night = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 5, 0);
-        const msToMidnight = night.getTime() - now.getTime();
-        if (msToMidnight > 0) {
-            setTimeout(() => {
-                fetchIftarTime(currentCity);
-                scheduleNextDayRefresh();
-            }, msToMidnight);
-        }
-    }
-    scheduleNextDayRefresh();
-})();
+            // Midnight refresh to re-check Hijri date and fetch next day's iftar (if needed)
+            function scheduleNextDayRefresh() {
+                const now = new Date();
+                const night = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 5, 0);
+                const msToMidnight = night.getTime() - now.getTime();
+                if (msToMidnight > 0) {
+                    setTimeout(() => {
+                        // Re-fetch tomorrow's Hijri and iftar for the new day
+                        checkTomorrowEid();
+                        fetchIftarTime(currentCity);
+                        scheduleNextDayRefresh();
+                    }, msToMidnight);
+                }
+            }
+            scheduleNextDayRefresh();
+        })();
     </script>
-    <div class="note">iftar = maghrib · times via Aladhan API (ISNA) · fallback 6:00 PM</div>
+    <div class="note">iftar = maghrib · times via Aladhan API · Eid Mubarak! 🎉</div>
 </body>
 </html>
